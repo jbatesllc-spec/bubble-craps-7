@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Bubble Craps 7</title>
+<style>
+body{margin:0;background:#071d19;color:#f8e5aa;font-family:Arial,sans-serif;text-align:center}
+header{background:#12392d;padding:20px;font-size:28px;font-weight:bold}
+main{max-width:650px;margin:auto;padding:15px}
+.panel{background:#154033;border:2px solid #cba44d;border-radius:16px;padding:16px;margin:14px 0}
+.stats{display:flex;justify-content:space-around;gap:12px;flex-wrap:wrap}
+.bubble{width:240px;height:180px;margin:18px auto;border:5px solid #b6e6ee;border-radius:50%;background:radial-gradient(circle at 35% 25%,#b8faff77,#12675b 75%);display:flex;justify-content:center;align-items:center;gap:15px;box-shadow:0 0 25px #68dfd755}
+.die{width:70px;height:70px;background:white;color:#111;border-radius:12px;font-size:54px;display:grid;place-items:center}
+button{padding:13px;margin:5px;border:0;border-radius:10px;background:#e8bd56;color:#10251d;font-size:16px;font-weight:bold;cursor:pointer}
+.bet{background:#27705a;color:white;border:1px solid #e8bd56}
+.selected{outline:3px solid white}
+#roll{width:85%;font-size:23px}
+#message{min-height:42px;line-height:1.4}
+small{color:#c7ddd4}
+</style>
+</head>
+<body>
+<header>🎲 BUBBLE CRAPS 7 🎲</header>
+<main>
+<section class="panel stats">
+<div>CHIPS<br><b id="bank">5000</b></div>
+<div>POINT<br><b id="point">OFF</b></div>
+<div>LEVEL<br><b id="level">1</b></div>
+<div>XP<br><b id="xp">0</b></div>
+</section>
+<section class="panel">
+<div class="bubble"><div class="die" id="die1">⚀</div><div class="die" id="die2">⚀</div></div>
+<p id="message">Place a bet to start playing!</p>
+<button id="roll" onclick="rollDice()">ROLL DICE</button>
+</section>
+<section class="panel">
+<h3>CHOOSE CHIP</h3>
+<div id="chips"></div>
+<h3>PLACE BETS</h3>
+<div id="bets"></div>
+<p id="wagers"></p>
+<button onclick="clearBets()">CLEAR BETS</button>
+<button onclick="dailyBonus()">DAILY BONUS +500</button>
+</section>
+<small>Play-money demo. No real-money gambling or cash prizes.</small>
+</main>
+<script>
+const key="bubblecraps7-demo";
+let state;
+try{state=JSON.parse(localStorage.getItem(key))}catch(e){}
+state=Object.assign({bank:5000,point:0,xp:0,lastBonus:"",bets:{pass:0,field:0,six:0,eight:0}},state||{});
+let chip=25,busy=false;
+const $=id=>document.getElementById(id);
+const faces=["⚀","⚁","⚂","⚃","⚄","⚅"];
+const names={pass:"PASS LINE",field:"FIELD",six:"PLACE 6",eight:"PLACE 8"};
+function save(){localStorage.setItem(key,JSON.stringify(state))}
+function render(){
+$("bank").textContent=state.bank.toLocaleString();
+$("point").textContent=state.point||"OFF";
+$("level").textContent=1+Math.floor(state.xp/100);
+$("xp").textContent=state.xp;
+$("wagers").textContent=Object.entries(state.bets).filter(([k,v])=>v).map(([k,v])=>names[k]+": "+v).join(" | ")||"No active bets";
+document.querySelectorAll(".bet").forEach(b=>b.textContent=names[b.dataset.bet]+" ("+state.bets[b.dataset.bet]+")");
+document.querySelectorAll(".chip").forEach(b=>b.classList.toggle("selected",Number(b.dataset.chip)===chip));
+$("roll").disabled=busy||!Object.values(state.bets).some(Boolean);
+}
+function bet(k){
+if(busy)return;
+if(k==="pass"&&state.point){$("message").textContent="Pass Line bets are only available on the come-out roll.";return}
+if(state.bank<chip){$("message").textContent="Not enough chips.";return}
+if((k==="six"||k==="eight")&&chip%6!==0){$("message").textContent="Place 6 and 8 require bets in multiples of 6.";return}
+state.bank-=chip;state.bets[k]+=chip;save();render();
+}
+function win(k,multiplier){
+const amount=state.bets[k];
+state.bank+=Math.round(amount*(1+multiplier));
+state.bets[k]=0;
+}
+function lose(k){state.bets[k]=0}
+function resolve(a,b){
+const total=a+b,oldPoint=state.point;
+let msg="Rolled "+a+" + "+b+" = "+total+". ";
+if(state.bets.field){
+if([2,3,4,9,10,11,12].includes(total)){
+win("field",total===2?2:total===12?3:1);msg+="Field wins! ";
+}else{lose("field");msg+="Field loses. "}
+}
+for(const [k,n] of [["six",6],["eight",8]]){
+if(state.bets[k]){
+if(total===n){win(k,7/6);msg+="Place "+n+" wins! "}
+else if(total===7){lose(k);msg+="Place "+n+" loses. "}
+}
+}
+if(!oldPoint){
+if(total===7||total===11){
+if(state.bets.pass){win("pass",1);msg+="Pass Line wins! "}
+}else if([2,3,12].includes(total)){
+if(state.bets.pass){lose("pass");msg+="Pass Line loses. "}
+}else{state.point=total;msg+="Point established: "+total+". "}
+}else if(total===oldPoint){
+if(state.bets.pass){win("pass",1);msg+="Point made! Pass Line wins! "}
+state.point=0;
+}else if(total===7){
+if(state.bets.pass){lose("pass");msg+="Seven out! "}
+state.point=0;
+}
+state.xp+=10;
+$("message").textContent=msg;
+save();render();
+}
+function rollDice(){
+if(busy||!Object.values(state.bets).some(Boolean))return;
+busy=true;render();let frames=0;
+const timer=setInterval(()=>{
+const a=1+Math.floor(Math.random()*6),b=1+Math.floor(Math.random()*6);
+$("die1").textContent=faces[a-1];$("die2").textContent=faces[b-1];
+if(++frames>=14){clearInterval(timer);busy=false;resolve(a,b)}
+},75);
+}
+function clearBets(){
+if(busy)return;
+for(const k of Object.keys(state.bets)){
+state.bank+=state.bets[k];state.bets[k]=0;
+}
+save();render();$("message").textContent="Bets cleared.";
+}
+function dailyBonus(){
+const today=new Date().toLocaleDateString("en-CA");
+if(state.lastBonus===today){$("message").textContent="Daily bonus already claimed.";return}
+state.bank+=500;state.lastBonus=today;save();render();
+$("message").textContent="You collected 500 bonus chips!";
+}
+for(const amount of [5,25,100,500]){
+const b=document.createElement("button");
+b.className="chip";b.dataset.chip=amount;b.textContent=amount;
+b.onclick=()=>{chip=amount;render()};$("chips").appendChild(b);
+}
+for(const k of Object.keys(names)){
+const b=document.createElement("button");
+b.className="bet";b.dataset.bet=k;b.onclick=()=>bet(k);
+$("bets").appendChild(b);
+}
+render();
+</script>
+</body>
+</html>
